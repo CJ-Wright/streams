@@ -202,13 +202,13 @@ class Stream(object):
         """ Add a time delay to results """
         return delay(interval, self, loop=None)
 
-    def combine_latest(self, *others):
+    def combine_latest(self, *others, **kwargs):
         """ Combine multiple streams together to a stream of tuples
 
         This will emit a new tuple of all of the most recent elements seen from
         any stream.
         """
-        return combine_latest(self, *others)
+        return combine_latest(self, *others, **kwargs)
 
     def concat(self):
         """ Flatten streams of lists or iterables into a stream of elements
@@ -536,9 +536,15 @@ class zip(Stream):
 
 
 class combine_latest(Stream):
-    def __init__(self, *children):
+    def __init__(self, *children, emit_on=None):
         self.last = [None for _ in children]
         self.missing = set(children)
+        if emit_on is not None:
+            if not hasattr(emit_on, '__iter__'):
+                emit_on = (emit_on, )
+            self.emit_on = emit_on
+        else:
+            self.emit_on = list(range(len(children)))
         Stream.__init__(self, children=children)
 
     def update(self, x, who=None):
@@ -546,7 +552,7 @@ class combine_latest(Stream):
             self.missing.remove(who)
 
         self.last[self.children.index(who)] = x
-        if not self.missing:
+        if not self.missing and self.children.index(who) in self.emit_on:
             tup = tuple(self.last)
             if tup and hasattr(tup[0], '__stream_merge__'):
                 tup = tup[0].__stream_merge__(*tup[1:])
